@@ -50,7 +50,8 @@
     "@supabase/supabase-js": "latest",
     "nanoid": "latest",
     "sonner": "latest",
-    "@headlessui/react": "latest"
+    "@headlessui/react": "latest",
+    "canvas-confetti": "latest"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
