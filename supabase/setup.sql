@@ -1,43 +1,42 @@
 
 -- Create the waitlist table
-CREATE TABLE waitlist (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  referral_code TEXT NOT NULL UNIQUE,
-  referred_by TEXT,
-  position INTEGER NOT NULL,
-  referral_count INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+create table public.waitlist (
+  id uuid default uuid_generate_v4() primary key,
+  email text not null unique,
+  position integer not null,
+  referral_code text not null unique,
+  referred_by text references waitlist(referral_code),
+  referral_count integer default 0,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
--- Create index for faster lookups
-CREATE INDEX waitlist_referral_code_idx ON waitlist(referral_code);
-CREATE INDEX waitlist_email_idx ON waitlist(email);
-
 -- Create function to increment referral count
-CREATE OR REPLACE FUNCTION increment_referral_count(code TEXT)
-RETURNS void AS $$
-BEGIN
-  UPDATE waitlist
-  SET referral_count = referral_count + 1
-  WHERE referral_code = code;
-END;
-$$ LANGUAGE plpgsql;
+create or replace function increment_referral_count(ref_code text)
+returns void as $$
+begin
+  update waitlist
+  set referral_count = referral_count + 1
+  where referral_code = ref_code;
+end;
+$$ language plpgsql;
 
--- Create RLS policies
-ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
+-- Create indexes for better performance
+create index waitlist_email_idx on waitlist(email);
+create index waitlist_referral_code_idx on waitlist(referral_code);
+create index waitlist_referred_by_idx on waitlist(referred_by);
 
--- Allow anyone to insert
-CREATE POLICY "Allow public inserts" ON waitlist
-  FOR INSERT WITH CHECK (true);
+-- Set up row level security
+alter table waitlist enable row level security;
 
--- Allow anyone to select
-CREATE POLICY "Allow public reads" ON waitlist
-  FOR SELECT USING (true);
+-- Allow anonymous insert
+create policy "Allow anonymous insert" on waitlist
+  for insert with check (true);
 
--- Only allow updates through our function
-CREATE POLICY "Allow controlled updates" ON waitlist
-  FOR UPDATE USING (
-    -- Only allow updates to referral_count through our RPC function
-    (SELECT current_user = 'authenticated')
-  );
+-- Allow anonymous select
+create policy "Allow anonymous select" on waitlist
+  for select using (true);
+
+-- Allow anonymous update of referral_count
+create policy "Allow anonymous update referral_count" on waitlist
+  for update using (true)
+  with check (true);

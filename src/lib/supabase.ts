@@ -1,70 +1,72 @@
 
 import { createClient } from '@supabase/supabase-js'
-import { env } from '../env'
 
-export const supabase = createClient(
-  env.VITE_SUPABASE_URL,
-  env.VITE_SUPABASE_ANON_KEY
-)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing Supabase environment variables')
+}
+
+export const supabase = createClient(supabaseUrl, supabaseKey)
 
 export interface WaitlistEntry {
   id: string
   email: string
+  position: number
   referral_code: string
   referred_by?: string
-  position: number
   referral_count: number
   created_at: string
 }
 
-// Helper functions for database operations
 export const waitlistApi = {
-  async getEntry(email: string) {
-    const { data, error } = await supabase
-      .from('waitlist')
-      .select()
-      .eq('email', email)
-      .single()
-    
-    if (error) throw error
-    return data as WaitlistEntry
-  },
-
   async createEntry(entry: Omit<WaitlistEntry, 'id' | 'created_at'>) {
     const { data, error } = await supabase
       .from('waitlist')
       .insert([entry])
       .select()
       .single()
-    
+
+    if (error) throw error
+    return data as WaitlistEntry
+  },
+
+  async getEntry(email: string) {
+    const { data, error } = await supabase
+      .from('waitlist')
+      .select()
+      .eq('email', email)
+      .single()
+
     if (error) throw error
     return data as WaitlistEntry
   },
 
   async incrementReferralCount(referralCode: string) {
     const { error } = await supabase.rpc('increment_referral_count', {
-      code: referralCode
+      ref_code: referralCode
     })
-    
+
     if (error) throw error
   },
 
   async getStats() {
-    const [countResult, leadersResult] = await Promise.all([
+    const [totalSignups, referralLeaders] = await Promise.all([
       supabase.from('waitlist').select('id', { count: 'exact' }),
       supabase
         .from('waitlist')
         .select('email, referral_count')
         .order('referral_count', { ascending: false })
-        .limit(3)
+        .limit(5)
     ])
 
-    if (countResult.error) throw countResult.error
-    if (leadersResult.error) throw leadersResult.error
+    if (totalSignups.error) throw totalSignups.error
+    if (referralLeaders.error) throw referralLeaders.error
 
     return {
-      totalSignups: countResult.count || 0,
-      referralLeaders: leadersResult.data || []
+      totalSignups: totalSignups.count || 0,
+      referralLeaders: referralLeaders.data
     }
   }
 }

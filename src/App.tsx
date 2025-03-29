@@ -1,9 +1,10 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Share2, Trophy, Users } from 'lucide-react'
+import { Share2, Trophy, Users, Star, ArrowRight } from 'lucide-react'
 import { Button } from './components/Button'
 import { Input } from './components/Input'
+import { Card } from './components/Card'
 import { waitlistApi, type WaitlistEntry } from './lib/supabase'
 import { toast } from 'react-hot-toast'
 
@@ -21,13 +22,31 @@ function App() {
 
   useEffect(() => {
     fetchStats()
-    // Check for referral code in URL
+    checkReferral()
+    checkExistingEntry()
+  }, [])
+
+  const checkExistingEntry = async () => {
+    const savedEmail = localStorage.getItem('waitlistEmail')
+    if (savedEmail) {
+      try {
+        const entry = await waitlistApi.getEntry(savedEmail)
+        setWaitlistEntry(entry)
+        setEmail(savedEmail)
+      } catch (error) {
+        console.error('Error fetching existing entry:', error)
+      }
+    }
+  }
+
+  const checkReferral = () => {
     const urlParams = new URLSearchParams(window.location.search)
     const referralCode = urlParams.get('ref')
     if (referralCode) {
       localStorage.setItem('referralCode', referralCode)
+      toast.success('Referral code applied!')
     }
-  }, [])
+  }
 
   const fetchStats = async () => {
     try {
@@ -52,6 +71,7 @@ function App() {
 
       if (existing) {
         setWaitlistEntry(existing)
+        localStorage.setItem('waitlistEmail', email)
         toast.error('Email already registered!')
         return
       }
@@ -72,6 +92,7 @@ function App() {
       }
 
       setWaitlistEntry(entry)
+      localStorage.setItem('waitlistEmail', email)
       toast.success('Successfully joined the waitlist!')
       await fetchStats()
 
@@ -111,19 +132,14 @@ function App() {
           className="text-center"
         >
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            Join the Waitlist
+            Join the <span className="gradient-text">Waitlist</span>
           </h1>
           <p className="mt-4 text-lg text-white/80">
             Be the first to know when we launch. Invite friends to move up the list!
           </p>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mt-12 glass rounded-2xl p-6 sm:p-8"
-        >
+        <Card className="mt-12">
           {!waitlistEntry ? (
             <form onSubmit={handleSubmit} className="space-y-6">
               <Input
@@ -135,53 +151,65 @@ function App() {
               />
               <Button type="submit" isLoading={loading} className="w-full">
                 Join Waitlist
+                <ArrowRight className="w-4 h-4 ml-2 inline" />
               </Button>
             </form>
           ) : (
             <div className="space-y-6">
               <div className="p-4 rounded-xl bg-white/5 text-center">
                 <p className="text-sm text-white/80">Your position</p>
-                <p className="text-4xl font-bold">{waitlistEntry.position}</p>
+                <p className="text-4xl font-bold gradient-text">
+                  #{waitlistEntry.position}
+                </p>
               </div>
               
               <div className="space-y-3">
-                <p className="text-sm text-white/80">Share your referral link to move up the list!</p>
+                <p className="text-sm text-white/80">
+                  Share your referral link to move up the list!
+                </p>
                 <Button onClick={handleShare} variant="secondary" className="w-full">
                   <Share2 className="w-4 h-4 mr-2 inline" />
                   Share Referral Link
                 </Button>
               </div>
+
+              <div className="pt-4 border-t border-white/10">
+                <p className="text-sm text-white/80">Your referral code</p>
+                <p className="text-xl font-mono font-bold">
+                  {waitlistEntry.referral_code}
+                </p>
+              </div>
             </div>
           )}
-        </motion.div>
+        </Card>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="mt-12 grid gap-6 sm:grid-cols-2"
-        >
-          <div className="glass rounded-2xl p-6 text-center">
+        <div className="mt-12 grid gap-6 sm:grid-cols-2">
+          <Card className="text-center">
             <Users className="w-6 h-6 mx-auto mb-3" />
             <p className="text-sm text-white/80">Total Signups</p>
-            <p className="text-3xl font-bold">{stats.totalSignups}</p>
-          </div>
+            <p className="text-3xl font-bold gradient-text">
+              {stats.totalSignups}
+            </p>
+          </Card>
 
-          <div className="glass rounded-2xl p-6">
+          <Card>
             <div className="flex items-center justify-center mb-4">
-              <Trophy className="w-6 h-6 mr-2" />
+              <Trophy className="w-6 h-6 mr-2 text-yellow-500" />
               <h3 className="font-medium">Top Referrers</h3>
             </div>
             <div className="space-y-2">
               {stats.referralLeaders.map((leader, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                  <span className="truncate">{leader.email}</span>
+                <div key={i} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-white/5">
+                  <div className="flex items-center space-x-2">
+                    {i === 0 && <Star className="w-4 h-4 text-yellow-500" />}
+                    <span className="truncate">{leader.email}</span>
+                  </div>
                   <span className="font-medium">{leader.referral_count}</span>
                 </div>
               ))}
             </div>
-          </div>
-        </motion.div>
+          </Card>
+        </div>
       </div>
     </div>
   )
