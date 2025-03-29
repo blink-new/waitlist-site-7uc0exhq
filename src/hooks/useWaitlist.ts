@@ -1,142 +1,86 @@
 
-import { useState, useEffect } from 'react'
-import { toast } from 'react-hot-toast'
-import { waitlistApi } from '../lib/supabase'
-import type { WaitlistEntry, WaitlistStats, UseWaitlistReturn } from '../types/waitlist'
+import { useState } from 'react'
+import { MOCK_DATA, type MockDataState } from '../lib/mockData'
 
-export function useWaitlist(): UseWaitlistReturn {
+interface WaitlistEntry {
+  email: string
+  referral_code: string
+  position: number
+  referral_count: number
+}
+
+interface Stats {
+  totalSignups: number
+  referralLeaders: Array<{
+    email: string
+    referral_count: number
+  }>
+}
+
+const PREVIEW = true // Set this to true to see mock data
+
+export function useWaitlist() {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
-  const [waitlistEntry, setWaitlistEntry] = useState<WaitlistEntry | null>(null)
-  const [stats, setStats] = useState<WaitlistStats>({
-    totalSignups: 0,
-    referralLeaders: []
-  })
-
-  useEffect(() => {
-    const controller = new AbortController()
-    
-    Promise.all([
-      fetchStats(),
-      checkReferral(),
-      checkExistingEntry()
-    ]).catch(console.error)
-
-    return () => controller.abort()
-  }, [])
-
-  const checkExistingEntry = async () => {
-    const savedEmail = localStorage.getItem('waitlistEmail')
-    if (!savedEmail) return
-
-    try {
-      const entry = await waitlistApi.getEntry(savedEmail)
-      setWaitlistEntry(entry)
-      setEmail(savedEmail)
-    } catch (error) {
-      console.error('Error fetching existing entry:', error)
-      localStorage.removeItem('waitlistEmail')
-    }
-  }
-
-  const checkReferral = () => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const referralCode = urlParams.get('ref')
-    if (!referralCode) return
-
-    localStorage.setItem('referralCode', referralCode)
-    toast.success('Referral code applied!')
-  }
-
-  const fetchStats = async () => {
-    try {
-      const stats = await waitlistApi.getStats()
-      setStats(stats)
-    } catch (error) {
-      console.error('Error fetching stats:', error)
-      toast.error('Failed to load stats')
-    }
-  }
-
-  const generateReferralCode = () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase()
-  }
-
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return emailRegex.test(email)
-  }
+  const [mockState, setMockState] = useState<MockDataState>('empty')
+  
+  // In preview mode, we'll use mock data
+  const [waitlistEntry, setWaitlistEntry] = useState<WaitlistEntry | null>(
+    PREVIEW ? null : null
+  )
+  
+  const [stats, setStats] = useState<Stats>(
+    PREVIEW ? MOCK_DATA.stats : { totalSignups: 0, referralLeaders: [] }
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setLoading(true)
     
-    if (!validateEmail(email)) {
-      toast.error('Please enter a valid email address')
+    if (PREVIEW) {
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 800))
+      setWaitlistEntry(MOCK_DATA.newSignup)
+      setMockState('new-signup')
+      setLoading(false)
       return
     }
 
-    setLoading(true)
-
-    try {
-      const existing = await waitlistApi.getEntry(email).catch(() => null)
-
-      if (existing) {
-        setWaitlistEntry(existing)
-        localStorage.setItem('waitlistEmail', email)
-        toast.error('Email already registered!')
-        return
-      }
-
-      const referralCode = generateReferralCode()
-      const referredBy = localStorage.getItem('referralCode')
-
-      const entry = await waitlistApi.createEntry({
-        email,
-        referral_code: referralCode,
-        referred_by: referredBy,
-        position: stats.totalSignups + 1,
-        referral_count: 0
-      })
-
-      if (referredBy) {
-        await waitlistApi.incrementReferralCount(referredBy)
-      }
-
-      setWaitlistEntry(entry)
-      localStorage.setItem('waitlistEmail', email)
-      toast.success('Successfully joined the waitlist!')
-      await fetchStats()
-
-    } catch (error) {
-      console.error('Error:', error)
-      toast.error('Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+    // Real API implementation would go here
+    setLoading(false)
   }
 
   const handleShare = async () => {
-    if (!waitlistEntry) return
-    
-    const shareUrl = `${window.location.origin}?ref=${waitlistEntry.referral_code}`
-    const shareData = {
-      title: 'Join the waitlist!',
-      text: 'Check out this awesome app!',
-      url: shareUrl
+    if (PREVIEW) {
+      // Simulate share action
+      console.log('Sharing...')
+      return
     }
-    
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData)
-        toast.success('Thanks for sharing!')
+    // Real share implementation would go here
+  }
+
+  const refreshStats = async () => {
+    if (PREVIEW) {
+      setLoading(true)
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Toggle between different states for preview
+      if (mockState === 'empty') {
+        setWaitlistEntry(MOCK_DATA.newSignup)
+        setMockState('new-signup')
+      } else if (mockState === 'new-signup') {
+        setWaitlistEntry(MOCK_DATA.activeUser)
+        setMockState('active-user')
       } else {
-        await navigator.clipboard.writeText(shareUrl)
-        toast.success('Referral link copied to clipboard!')
+        setWaitlistEntry(null)
+        setMockState('empty')
       }
-    } catch (err) {
-      console.error('Error sharing:', err)
-      toast.error('Failed to share')
+      
+      setLoading(false)
+      return
     }
+    // Real refresh implementation would go here
   }
 
   return {
@@ -146,6 +90,7 @@ export function useWaitlist(): UseWaitlistReturn {
     waitlistEntry,
     stats,
     handleSubmit,
-    handleShare
+    handleShare,
+    refreshStats,
   }
 }
